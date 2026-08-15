@@ -45,10 +45,10 @@ function HeaderWrapper({openCart}) {
   const rootData = useRouteLoaderData('root');
 
   return (
-    <Suspense fallback={<SoleSelectHeader cartCount={0} />}>
+    <Suspense fallback={<SoleSelectHeader cartCount={0} openCart={openCart} />}>
       <Await resolve={rootData?.cart}>
         {(cart) => (
-          <SoleSelectHeader cartCount={cart?.totalQuantity || 0} />
+          <SoleSelectHeader cartCount={cart?.totalQuantity || 0} openCart={openCart} />
         )}
       </Await>
     </Suspense>
@@ -60,7 +60,7 @@ function CartDrawer({isOpen, onClose}) {
   if (!rootData) return null;
 
   return (
-    <Drawer open={isOpen} onClose={onClose} heading="Cart" openFrom="right">
+    <Drawer open={isOpen} onClose={onClose} heading="Shopping Bag" openFrom="right">
       <div className="grid">
         <Suspense fallback={<CartLoading />}>
           <Await resolve={rootData?.cart}>

@@ -1,7 +1,7 @@
-import {useRef, Suspense} from 'react';
+import {useRef, Suspense, useState} from 'react';
 import {Disclosure, Listbox} from '@headlessui/react';
 import {defer} from '@shopify/remix-oxygen';
-import {useLoaderData, Await} from '@remix-run/react';
+import {useLoaderData, Await, Link} from '@remix-run/react';
 import {
   getSeoMeta,
   Money,
@@ -12,45 +12,33 @@ import {
   getAdjacentAndFirstAvailableVariants,
   useSelectedOptionInUrlParam,
   getProductOptions,
+  Image,
 } from '@shopify/hydrogen';
 import invariant from 'tiny-invariant';
 import clsx from 'clsx';
-import {Heading, Section, Text} from '~/components/Text';
-import {Link} from '~/components/Link';
-import {Button} from '~/components/Button';
+
 import {AddToCartButton} from '~/components/AddToCartButton';
 import {Skeleton} from '~/components/Skeleton';
 import {ProductSwimlane} from '~/components/ProductSwimlane';
-import {ProductGallery} from '~/components/ProductGallery';
 import {IconCaret, IconCheck, IconClose} from '~/components/Icon';
 import {getExcerpt} from '~/lib/utils';
 import {seoPayload} from '~/lib/seo.server';
 import {routeHeaders} from '~/data/cache';
 import {MEDIA_FRAGMENT, PRODUCT_CARD_FRAGMENT} from '~/data/fragments';
+import {getTransparentProductImage} from '~/lib/transparentImages';
 
 export const headers = routeHeaders;
 
-/**
- * @param {LoaderFunctionArgs} args
- */
 export async function loader(args) {
   const {productHandle} = args.params;
   invariant(productHandle, 'Missing productHandle param, check route filename');
 
-  // Start fetching non-critical data without blocking time to first byte
   const deferredData = loadDeferredData(args);
-
-  // Await the critical data required to render initial state of the page
   const criticalData = await loadCriticalData(args);
 
   return defer({...deferredData, ...criticalData});
 }
 
-/**
- * Load data necessary for rendering content above the fold. This is the critical data
- * needed to render the page. If it's unavailable, the whole page should 400 or 500 error.
- * @param {LoaderFunctionArgs}
- */
 async function loadCriticalData({params, request, context}) {
   const {productHandle} = params;
   invariant(productHandle, 'Missing productHandle param, check route filename');
@@ -66,7 +54,6 @@ async function loadCriticalData({params, request, context}) {
         language: context.storefront.i18n.language,
       },
     }),
-    // Add other queries here, so that they are loaded in parallel
   ]);
 
   if (!product?.id) {
@@ -93,114 +80,159 @@ async function loadCriticalData({params, request, context}) {
   };
 }
 
-/**
- * Load data for rendering content below the fold. This data is deferred and will be
- * fetched after the initial page load. If it's unavailable, the page should still 200.
- * Make sure to not throw any errors here, as it will cause the page to 500.
- * @param {LoaderFunctionArgs} args
- */
-function loadDeferredData(args) {
-  // Put any API calls that are not critical to be available on first page render
-  // For example: product reviews, product recommendations, social feeds.
-
+function loadDeferredData() {
   return {};
 }
 
-/**
- * @param {Class<loader>>}
- */
 export const meta = ({matches}) => {
   return getSeoMeta(...matches.map((match) => match.data.seo));
 };
 
 export default function Product() {
-  /** @type {LoaderReturnData} */
   const {product, shop, recommended, variants, storeDomain} = useLoaderData();
   const {media, title, vendor, descriptionHtml} = product;
   const {shippingPolicy, refundPolicy} = shop;
 
-  // Optimistically selects a variant with given available variant information
   const selectedVariant = useOptimisticVariant(
     product.selectedOrFirstAvailableVariant,
     variants,
   );
 
-  // Sets the search param to the selected variant without navigation
-  // only when no search params are set in the url
   useSelectedOptionInUrlParam(selectedVariant.selectedOptions);
 
-  // Get the product options array
   const productOptions = getProductOptions({
     ...product,
     selectedOrFirstAvailableVariant: selectedVariant,
   });
 
+  // Extract transparent image or Shopify media image
+  const transparentImg = getTransparentProductImage(product);
+
   return (
-    <>
-      <Section className="px-0 md:px-8 lg:px-12">
-        <div className="grid items-start md:gap-6 lg:gap-20 md:grid-cols-2 lg:grid-cols-3">
-          <ProductGallery
-            media={media.nodes}
-            className="w-full lg:col-span-2"
-          />
-          <div className="sticky md:-mb-nav md:top-nav md:-translate-y-nav md:h-screen md:pt-nav hiddenScroll md:overflow-y-scroll">
-            <section className="flex flex-col w-full max-w-xl gap-8 p-6 md:mx-auto md:max-w-sm md:px-0">
-              <div className="grid gap-2">
-                <Heading as="h1" className="whitespace-normal">
-                  {title}
-                </Heading>
-                {vendor && (
-                  <Text className={'opacity-50 font-medium'}>{vendor}</Text>
-                )}
-              </div>
-              <ProductForm
-                productOptions={productOptions}
-                selectedVariant={selectedVariant}
-                storeDomain={storeDomain}
-              />
-              <div className="grid gap-4 py-4">
-                {descriptionHtml && (
-                  <ProductDetail
-                    title="Product Details"
-                    content={descriptionHtml}
-                  />
-                )}
-                {shippingPolicy?.body && (
-                  <ProductDetail
-                    title="Shipping"
-                    content={getExcerpt(shippingPolicy.body)}
-                    learnMore={`/policies/${shippingPolicy.handle}`}
-                  />
-                )}
-                {refundPolicy?.body && (
-                  <ProductDetail
-                    title="Returns"
-                    content={getExcerpt(refundPolicy.body)}
-                    learnMore={`/policies/${refundPolicy.handle}`}
-                  />
-                )}
-              </div>
-            </section>
-          </div>
+    <div className="bg-ivory min-h-screen py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-12">
+        
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center gap-2 text-xs font-bold tracking-widest text-mutedText uppercase">
+          <Link to="/" className="hover:text-coral transition-colors">HOME</Link>
+          <span>/</span>
+          <Link to="/collections/all" className="hover:text-coral transition-colors">PRODUCTS</Link>
+          <span>/</span>
+          <span className="text-ink">{title}</span>
         </div>
-      </Section>
-      <Suspense fallback={<Skeleton className="h-32" />}>
-        <Await
-          errorElement="There was a problem loading related products"
-          resolve={recommended}
-        >
-          {(products) => (
-            <ProductSwimlane title="Related Products" products={products} />
-          )}
-        </Await>
-      </Suspense>
+
+        {/* Main Product Showcase Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-start">
+          
+          {/* Left Column: Image Stage */}
+          <div className="lg:col-span-7 bg-white rounded-3xl p-6 sm:p-12 border border-borderColor shadow-sm flex items-center justify-center relative overflow-hidden min-h-[420px] lg:min-h-[540px]">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-coral/5 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div className="relative z-10 w-full max-w-lg transform hover:scale-105 transition-transform duration-500">
+              <img
+                src={transparentImg}
+                alt={title}
+                className="w-full h-auto object-contain max-h-[440px] drop-shadow-[0_22px_25px_rgba(0,0,0,0.18)]"
+              />
+            </div>
+          </div>
+
+          {/* Right Column: Product Form & Info */}
+          <div className="lg:col-span-5 space-y-6">
+            
+            {/* Vendor Tag */}
+            <div className="space-y-1">
+              <div className="w-8 h-[2px] bg-coral"></div>
+              <span className="text-xs font-bold tracking-[0.2em] text-coral uppercase block pt-1">
+                {vendor}
+              </span>
+            </div>
+
+            {/* Title */}
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-ink uppercase tracking-tight leading-[1.08]">
+              {title}
+            </h1>
+
+            {/* Price Display */}
+            <div className="text-2xl font-black text-ink flex items-center gap-3 pt-1">
+              {selectedVariant?.price ? (
+                <Money data={selectedVariant.price} />
+              ) : (
+                <span>₹8,999.00 INR</span>
+              )}
+              {selectedVariant?.compareAtPrice && (
+                <span className="line-through text-sm text-slate-400 font-normal">
+                  <Money data={selectedVariant.compareAtPrice} />
+                </span>
+              )}
+            </div>
+
+            {/* Product Options & Add to Bag */}
+            <ProductForm
+              productOptions={productOptions}
+              selectedVariant={selectedVariant}
+              storeDomain={storeDomain}
+            />
+
+            {/* Accordion Disclosures */}
+            <div className="border-t border-borderColor pt-6 space-y-4">
+              {descriptionHtml && (
+                <ProductDetail
+                  title="Product Details & Crafting"
+                  content={descriptionHtml}
+                />
+              )}
+              {shippingPolicy?.body && (
+                <ProductDetail
+                  title="Express Delivery"
+                  content={getExcerpt(shippingPolicy.body)}
+                  learnMore={`/policies/${shippingPolicy.handle}`}
+                />
+              )}
+              {refundPolicy?.body && (
+                <ProductDetail
+                  title="30-Day Easy Returns"
+                  content={getExcerpt(refundPolicy.body)}
+                  learnMore={`/policies/${refundPolicy.handle}`}
+                />
+              )}
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* Related Products Section */}
+        <div className="pt-16 border-t border-borderColor">
+          <Suspense fallback={<Skeleton className="h-64" />}>
+            <Await
+              errorElement="There was a problem loading related products"
+              resolve={recommended}
+            >
+              {(products) => (
+                <div className="space-y-8">
+                  <div className="text-center space-y-2">
+                    <h2 className="text-2xl sm:text-3xl font-black text-ink uppercase tracking-tight">
+                      RELATED SILHOUETTES
+                    </h2>
+                    <div className="w-12 h-[2px] bg-coral mx-auto"></div>
+                  </div>
+                  <ProductSwimlane products={products?.nodes || []} />
+                </div>
+              )}
+            </Await>
+          </Suspense>
+        </div>
+
+      </div>
+
       <Analytics.ProductView
         data={{
           products: [
             {
               id: product.id,
               title: product.title,
-              price: selectedVariant?.price.amount || '0',
+              price: selectedVariant?.price?.amount || '0',
               vendor: product.vendor,
               variantId: selectedVariant?.id || '',
               variantTitle: selectedVariant?.title || '',
@@ -209,261 +241,106 @@ export default function Product() {
           ],
         }}
       />
-    </>
+    </div>
   );
 }
 
-/**
- * @param {{
- *   productOptions: MappedProductOptions[];
- *   selectedVariant: ProductFragment['selectedOrFirstAvailableVariant'];
- *   storeDomain: string;
- * }}
- */
 export function ProductForm({productOptions, selectedVariant, storeDomain}) {
   const closeRef = useRef(null);
-
   const isOutOfStock = !selectedVariant?.availableForSale;
 
-  const isOnSale =
-    selectedVariant?.price?.amount &&
-    selectedVariant?.compareAtPrice?.amount &&
-    selectedVariant?.price?.amount < selectedVariant?.compareAtPrice?.amount;
-
   return (
-    <div className="grid gap-10">
-      <div className="grid gap-4">
-        {productOptions.map((option, optionIndex) => (
-          <div
-            key={option.name}
-            className="product-options flex flex-col flex-wrap mb-4 gap-y-2 last:mb-0"
-          >
-            <Heading as="legend" size="lead" className="min-w-[4rem]">
-              {option.name}
-            </Heading>
-            <div className="flex flex-wrap items-baseline gap-4">
-              {option.optionValues.length > 7 ? (
-                <div className="relative w-full">
-                  <Listbox>
-                    {({open}) => (
-                      <>
-                        <Listbox.Button
-                          ref={closeRef}
-                          className={clsx(
-                            'flex items-center justify-between w-full py-3 px-4 border border-primary',
-                            open
-                              ? 'rounded-b md:rounded-t md:rounded-b-none'
-                              : 'rounded',
-                          )}
-                        >
-                          <span>
-                            {
-                              selectedVariant?.selectedOptions[optionIndex]
-                                .value
-                            }
-                          </span>
-                          <IconCaret direction={open ? 'up' : 'down'} />
-                        </Listbox.Button>
-                        <Listbox.Options
-                          className={clsx(
-                            'border-primary bg-contrast absolute bottom-12 z-30 grid h-48 w-full overflow-y-scroll rounded-t border px-2 py-2 transition-[max-height] duration-150 sm:bottom-auto md:rounded-b md:rounded-t-none md:border-t-0 md:border-b',
-                            open ? 'max-h-48' : 'max-h-0',
-                          )}
-                        >
-                          {option.optionValues
-                            .filter((value) => value.available)
-                            .map(
-                              ({
-                                isDifferentProduct,
-                                name,
-                                variantUriQuery,
-                                handle,
-                                selected,
-                              }) => (
-                                <Listbox.Option
-                                  key={`option-${option.name}-${name}`}
-                                  value={name}
-                                >
-                                  <Link
-                                    {...(!isDifferentProduct
-                                      ? {rel: 'nofollow'}
-                                      : {})}
-                                    to={`/products/${handle}?${variantUriQuery}`}
-                                    preventScrollReset
-                                    className={clsx(
-                                      'text-primary w-full p-2 transition rounded flex justify-start items-center text-left cursor-pointer',
-                                      selected && 'bg-primary/10',
-                                    )}
-                                    onClick={() => {
-                                      if (!closeRef?.current) return;
-                                      closeRef.current.click();
-                                    }}
-                                  >
-                                    {name}
-                                    {selected && (
-                                      <span className="ml-2">
-                                        <IconCheck />
-                                      </span>
-                                    )}
-                                  </Link>
-                                </Listbox.Option>
-                              ),
-                            )}
-                        </Listbox.Options>
-                      </>
-                    )}
-                  </Listbox>
-                </div>
-              ) : (
-                option.optionValues.map(
-                  ({
-                    isDifferentProduct,
-                    name,
-                    variantUriQuery,
-                    handle,
-                    selected,
-                    available,
-                    swatch,
-                  }) => (
-                    <Link
-                      key={option.name + name}
-                      {...(!isDifferentProduct ? {rel: 'nofollow'} : {})}
-                      to={`/products/${handle}?${variantUriQuery}`}
-                      preventScrollReset
-                      prefetch="intent"
-                      replace
-                      className={clsx(
-                        'leading-none py-1 border-b-[1.5px] cursor-pointer transition-all duration-200',
-                        selected ? 'border-primary/50' : 'border-primary/0',
-                        available ? 'opacity-100' : 'opacity-50',
-                      )}
-                    >
-                      <ProductOptionSwatch swatch={swatch} name={name} />
-                    </Link>
-                  ),
-                )
-              )}
-            </div>
-          </div>
-        ))}
-        {selectedVariant && (
-          <div className="grid items-stretch gap-4">
-            {isOutOfStock ? (
-              <Button variant="secondary" disabled>
-                <Text>Sold out</Text>
-              </Button>
-            ) : (
-              <AddToCartButton
-                lines={[
-                  {
-                    merchandiseId: selectedVariant.id,
-                    quantity: 1,
-                  },
-                ]}
-                variant="primary"
-                data-test="add-to-cart"
-              >
-                <Text
-                  as="span"
-                  className="flex items-center justify-center gap-2"
+    <div className="space-y-6 pt-2">
+      {productOptions.map((option) => (
+        <div key={option.name} className="space-y-3">
+          <label className="text-xs font-bold tracking-wider text-ink uppercase block">
+            Select {option.name}
+          </label>
+          <div className="flex flex-wrap gap-2.5">
+            {option.optionValues.map(
+              ({
+                name,
+                variantUriQuery,
+                handle,
+                selected,
+                available,
+              }) => (
+                <Link
+                  key={option.name + name}
+                  to={`/products/${handle}?${variantUriQuery}`}
+                  preventScrollReset
+                  prefetch="intent"
+                  replace
+                  className={`px-4 py-2.5 text-xs font-bold rounded-xl uppercase transition-all duration-200 border ${
+                    selected
+                      ? 'bg-ink text-white border-ink shadow-md'
+                      : available
+                      ? 'bg-white text-ink border-borderColor hover:border-coral'
+                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                  }`}
                 >
-                  <span>Add to Cart</span> <span>·</span>{' '}
-                  <Money
-                    withoutTrailingZeros
-                    data={selectedVariant?.price}
-                    as="span"
-                    data-test="price"
-                  />
-                  {isOnSale && (
-                    <Money
-                      withoutTrailingZeros
-                      data={selectedVariant?.compareAtPrice}
-                      as="span"
-                      className="opacity-50 strike"
-                    />
-                  )}
-                </Text>
-              </AddToCartButton>
-            )}
-            {!isOutOfStock && (
-              <ShopPayButton
-                width="100%"
-                variantIds={[selectedVariant?.id]}
-                storeDomain={storeDomain}
-              />
+                  {name}
+                </Link>
+              ),
             )}
           </div>
+        </div>
+      ))}
+
+      {/* Add to Cart & Buy Now Buttons */}
+      <div className="space-y-3 pt-2">
+        {isOutOfStock ? (
+          <button disabled className="w-full bg-slate-200 text-slate-400 py-4 rounded-xl text-xs font-bold uppercase tracking-wider">
+            Sold Out
+          </button>
+        ) : (
+          <AddToCartButton
+            lines={[
+              {
+                merchandiseId: selectedVariant.id,
+                quantity: 1,
+              },
+            ]}
+            className="w-full btn-soleselect py-4 rounded-xl text-center flex items-center justify-center gap-2 text-xs tracking-[0.18em]"
+          >
+            <span>ADD TO BAG</span>
+            <span>—</span>
+            <Money withoutTrailingZeros data={selectedVariant?.price} />
+          </AddToCartButton>
+        )}
+
+        {!isOutOfStock && (
+          <ShopPayButton
+            width="100%"
+            variantIds={[selectedVariant?.id]}
+            storeDomain={storeDomain}
+          />
         )}
       </div>
     </div>
   );
 }
 
-/**
- * @param {{
- *   swatch?: Maybe<ProductOptionValueSwatch> | undefined;
- *   name: string;
- * }}
- */
-function ProductOptionSwatch({swatch, name}) {
-  const image = swatch?.image?.previewImage?.url;
-  const color = swatch?.color;
-
-  if (!image && !color) return name;
-
-  return (
-    <div
-      aria-label={name}
-      className="w-8 h-8"
-      style={{
-        backgroundColor: color || 'transparent',
-      }}
-    >
-      {!!image && <img src={image} alt={name} />}
-    </div>
-  );
-}
-
-/**
- * @param {{
- *   title: string;
- *   content: string;
- *   learnMore?: string;
- * }}
- */
 function ProductDetail({title, content, learnMore}) {
   return (
-    <Disclosure key={title} as="div" className="grid w-full gap-2">
+    <Disclosure key={title} as="div" className="border-b border-borderColor/60 pb-4">
       {({open}) => (
         <>
-          <Disclosure.Button className="text-left">
-            <div className="flex justify-between">
-              <Text size="lead" as="h4">
-                {title}
-              </Text>
-              <IconClose
-                className={clsx(
-                  'transition-transform transform-gpu duration-200',
-                  !open && 'rotate-[45deg]',
-                )}
-              />
-            </div>
+          <Disclosure.Button className="w-full flex items-center justify-between py-2 text-left">
+            <span className="text-xs font-bold tracking-wider text-ink uppercase">
+              {title}
+            </span>
+            <span className="text-lg font-bold text-coral">
+              {open ? '−' : '+'}
+            </span>
           </Disclosure.Button>
 
-          <Disclosure.Panel className={'pb-4 pt-2 grid gap-2'}>
-            <div
-              className="prose dark:prose-invert"
-              dangerouslySetInnerHTML={{__html: content}}
-            />
+          <Disclosure.Panel className="pt-2 text-xs text-mutedText leading-relaxed space-y-2">
+            <div dangerouslySetInnerHTML={{__html: content}} />
             {learnMore && (
-              <div className="">
-                <Link
-                  className="pb-px border-b border-primary/30 text-primary/50"
-                  to={learnMore}
-                >
-                  Learn more
-                </Link>
-              </div>
+              <Link to={learnMore} className="inline-block text-coral font-bold pt-1 hover:underline">
+                Learn Policy →
+              </Link>
             )}
           </Disclosure.Panel>
         </>
@@ -602,10 +479,6 @@ const RECOMMENDED_PRODUCTS_QUERY = `#graphql
   ${PRODUCT_CARD_FRAGMENT}
 `;
 
-/**
- * @param {Storefront} storefront
- * @param {string} productId
- */
 async function getRecommendedProducts(storefront, productId) {
   const products = await storefront.query(RECOMMENDED_PRODUCTS_QUERY, {
     variables: {productId, count: 12},
@@ -628,12 +501,3 @@ async function getRecommendedProducts(storefront, productId) {
 
   return {nodes: mergedProducts};
 }
-
-/** @typedef {import('@shopify/remix-oxygen').MetaArgs} MetaArgs */
-/** @typedef {import('@shopify/remix-oxygen').LoaderFunctionArgs} LoaderFunctionArgs */
-/** @typedef {import('@shopify/hydrogen').MappedProductOptions} MappedProductOptions */
-/** @typedef {import('@shopify/hydrogen/storefront-api-types').Maybe} Maybe */
-/** @typedef {import('@shopify/hydrogen/storefront-api-types').ProductOptionValueSwatch} ProductOptionValueSwatch */
-/** @typedef {import('storefrontapi.generated').ProductFragment} ProductFragment */
-/** @typedef {import('~/lib/type').Storefront} Storefront */
-/** @typedef {ReturnType<typeof useLoaderData<typeof loader>>} LoaderReturnData */

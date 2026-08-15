@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from '@remix-run/react';
-import { useCart } from '@shopify/hydrogen-react';
 
-export function SoleSelectHeader({ cartCount = 0 }) {
+export function SoleSelectHeader({ cartCount = 0, openCart }) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -42,11 +41,11 @@ export function SoleSelectHeader({ cartCount = 0 }) {
         <div className="flex items-center gap-5 text-ink">
           
           {/* Search Trigger */}
-          <button className="hover:text-coral transition-colors p-1" aria-label="Search">
+          <Link to="/search" className="hover:text-coral transition-colors p-1" aria-label="Search">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-          </button>
+          </Link>
 
           {/* Account Icon */}
           <Link to="/account" className="hidden sm:block hover:text-coral transition-colors p-1" aria-label="Account">
@@ -55,8 +54,12 @@ export function SoleSelectHeader({ cartCount = 0 }) {
             </svg>
           </Link>
 
-          {/* Cart Icon & Badge */}
-          <Link to="/cart" className="relative hover:text-coral transition-colors p-1" aria-label="Shopping Cart">
+          {/* Cart Icon & Drawer Trigger */}
+          <button
+            onClick={openCart}
+            className="relative hover:text-coral transition-colors p-1"
+            aria-label="Shopping Cart"
+          >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
             </svg>
@@ -65,7 +68,7 @@ export function SoleSelectHeader({ cartCount = 0 }) {
                 {cartCount}
               </span>
             )}
-          </Link>
+          </button>
 
           {/* Mobile Menu Hamburger */}
           <button
@@ -91,6 +94,7 @@ export function SoleSelectHeader({ cartCount = 0 }) {
             <Link to="/collections/all" onClick={() => setIsMobileMenuOpen(false)}>WOMEN</Link>
             <Link to="/collections/all" onClick={() => setIsMobileMenuOpen(false)}>BRANDS</Link>
             <Link to="/journal" onClick={() => setIsMobileMenuOpen(false)}>JOURNAL</Link>
+            <Link to="/account" onClick={() => setIsMobileMenuOpen(false)}>ACCOUNT</Link>
           </nav>
         </div>
       )}
