@@ -36,28 +36,37 @@ export async function loader(args) {
 async function loadCriticalData({context, request}) {
   const {language, country} = context.storefront.i18n;
 
-  const [{product: heroProduct}, {collection: homepageCollection}] =
-    await Promise.all([
-      context.storefront
-        .query(FEATURED_PRODUCT_QUERY, {
-          variables: {
-            handle: STOREFRONT_CONFIG.featuredProductHandle,
-            country,
-            language,
-          },
-        })
-        .catch(() => ({product: null})),
+  const [
+    {product: heroProduct},
+    {collection: homepageCollection},
+    metaobjectsData,
+  ] = await Promise.all([
+    context.storefront
+      .query(FEATURED_PRODUCT_QUERY, {
+        variables: {
+          handle: STOREFRONT_CONFIG.featuredProductHandle,
+          country,
+          language,
+        },
+      })
+      .catch(() => ({product: null})),
 
-      context.storefront
-        .query(HOMEPAGE_COLLECTION_QUERY, {
-          variables: {
-            handle: STOREFRONT_CONFIG.homepageCollectionHandle,
-            country,
-            language,
-          },
-        })
-        .catch(() => ({collection: null})),
-    ]);
+    context.storefront
+      .query(HOMEPAGE_COLLECTION_QUERY, {
+        variables: {
+          handle: STOREFRONT_CONFIG.homepageCollectionHandle,
+          country,
+          language,
+        },
+      })
+      .catch(() => ({collection: null})),
+
+    context.storefront
+      .query(HOMEPAGE_METAOBJECTS_QUERY, {
+        variables: {country, language},
+      })
+      .catch(() => null),
+  ]);
 
   // Fallback query if home-page-shoes collection isn't created yet in live Shopify store
   let fallbackProducts = null;
@@ -74,6 +83,7 @@ async function loadCriticalData({context, request}) {
     heroProduct,
     homepageCollection,
     fallbackProducts,
+    homepageMetaobjects: metaobjectsData?.metaobjects?.nodes || [],
     seo: seoPayload.home({url: request.url}),
   };
 }
@@ -87,7 +97,7 @@ export const meta = ({matches}) => {
 };
 
 export default function Homepage() {
-  const {homepageCollection, fallbackProducts} = useLoaderData();
+  const {homepageCollection, fallbackProducts, homepageMetaobjects} = useLoaderData();
 
   // Determine products to display (Live Collection -> Live All Products -> Fallback Static Data)
   const displayProducts =
@@ -99,13 +109,13 @@ export default function Homepage() {
 
   return (
     <div className="space-y-0">
-      {/* Top Interactive Hero Showcase matching Reynolds layout */}
-      <HeroShowcase products={displayProducts} />
+      {/* Top Interactive Hero Showcase with Metaobject Customization Support */}
+      <HeroShowcase products={displayProducts} metaobjects={homepageMetaobjects} />
 
       {/* 5-Pair Featured Collection Edit */}
       <FeaturedCollection products={displayProducts} />
 
-      {/* Editorial Journal Feature ("THE ONE-SHOE HOLIDAY PACKING LIST." with attached runner graphic) */}
+      {/* Editorial Journal Feature */}
       <EditorialFeature />
 
       {/* Service Benefits */}
@@ -182,4 +192,28 @@ const ALL_PRODUCTS_QUERY = `#graphql
     }
   }
   ${PRODUCT_CARD_FRAGMENT}
+`;
+
+const HOMEPAGE_METAOBJECTS_QUERY = `#graphql
+  query homepageMetaobjects($country: CountryCode, $language: LanguageCode)
+  @inContext(country: $country, language: $language) {
+    metaobjects(type: "homepage_hero", first: 5) {
+      nodes {
+        id
+        handle
+        fields {
+          key
+          value
+          reference {
+            ... on MediaImage {
+              image {
+                url
+                altText
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 `;

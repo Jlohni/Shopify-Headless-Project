@@ -436,6 +436,29 @@ export type AllProductsQuery = {
   };
 };
 
+export type HomepageMetaobjectsQueryVariables = StorefrontAPI.Exact<{
+  country?: StorefrontAPI.InputMaybe<StorefrontAPI.CountryCode>;
+  language?: StorefrontAPI.InputMaybe<StorefrontAPI.LanguageCode>;
+}>;
+
+export type HomepageMetaobjectsQuery = {
+  metaobjects: {
+    nodes: Array<
+      Pick<StorefrontAPI.Metaobject, 'id' | 'handle'> & {
+        fields: Array<
+          Pick<StorefrontAPI.MetaobjectField, 'key' | 'value'> & {
+            reference?: StorefrontAPI.Maybe<{
+              image?: StorefrontAPI.Maybe<
+                Pick<StorefrontAPI.Image, 'url' | 'altText'>
+              >;
+            }>;
+          }
+        >;
+      }
+    >;
+  };
+};
+
 export type ApiAllProductsQueryVariables = StorefrontAPI.Exact<{
   query?: StorefrontAPI.InputMaybe<StorefrontAPI.Scalars['String']['input']>;
   count?: StorefrontAPI.InputMaybe<StorefrontAPI.Scalars['Int']['input']>;
@@ -1352,6 +1375,10 @@ interface GeneratedQueryTypes {
   '#graphql\n  query allProducts($country: CountryCode, $language: LanguageCode)\n  @inContext(country: $country, language: $language) {\n    products(first: 6) {\n      nodes {\n        ...ProductCard\n      }\n    }\n  }\n  #graphql\n  fragment ProductCard on Product {\n    id\n    title\n    publishedAt\n    handle\n    vendor\n    featuredImage {\n      url\n      altText\n      width\n      height\n    }\n    variants(first: 1) {\n      nodes {\n        id\n        availableForSale\n        image {\n          url\n          altText\n          width\n          height\n        }\n        price {\n          amount\n          currencyCode\n        }\n        compareAtPrice {\n          amount\n          currencyCode\n        }\n        selectedOptions {\n          name\n          value\n        }\n        product {\n          handle\n          title\n        }\n      }\n    }\n  }\n\n': {
     return: AllProductsQuery;
     variables: AllProductsQueryVariables;
+  };
+  '#graphql\n  query homepageMetaobjects($country: CountryCode, $language: LanguageCode)\n  @inContext(country: $country, language: $language) {\n    metaobjects(type: "homepage_hero", first: 5) {\n      nodes {\n        id\n        handle\n        fields {\n          key\n          value\n          reference {\n            ... on MediaImage {\n              image {\n                url\n                altText\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n': {
+    return: HomepageMetaobjectsQuery;
+    variables: HomepageMetaobjectsQueryVariables;
   };
   '#graphql\n  query ApiAllProducts(\n    $query: String\n    $count: Int\n    $reverse: Boolean\n    $country: CountryCode\n    $language: LanguageCode\n    $sortKey: ProductSortKeys\n  ) @inContext(country: $country, language: $language) {\n    products(first: $count, sortKey: $sortKey, reverse: $reverse, query: $query) {\n      nodes {\n        ...ProductCard\n      }\n    }\n  }\n  #graphql\n  fragment ProductCard on Product {\n    id\n    title\n    publishedAt\n    handle\n    vendor\n    featuredImage {\n      url\n      altText\n      width\n      height\n    }\n    variants(first: 1) {\n      nodes {\n        id\n        availableForSale\n        image {\n          url\n          altText\n          width\n          height\n        }\n        price {\n          amount\n          currencyCode\n        }\n        compareAtPrice {\n          amount\n          currencyCode\n        }\n        selectedOptions {\n          name\n          value\n        }\n        product {\n          handle\n          title\n        }\n      }\n    }\n  }\n\n': {
     return: ApiAllProductsQuery;
