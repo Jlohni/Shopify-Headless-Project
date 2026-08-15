@@ -7,6 +7,15 @@ export default {
   theme: {
     extend: {
       colors: {
+        ink: '#151515',
+        ivory: '#F7F4EE',
+        coral: '#E65348',
+        softCoral: '#F0B7AB',
+        sand: '#D8C6AE',
+        powderBlue: '#DCE6F0',
+        forestGreen: '#294C40',
+        mutedText: '#706C65',
+        borderColor: '#D8D3CA',
         primary: 'rgb(var(--color-primary) / <alpha-value>)',
         contrast: 'rgb(var(--color-contrast) / <alpha-value>)',
         notice: 'rgb(var(--color-accent) / <alpha-value>)',
@@ -39,8 +48,8 @@ export default {
         mobileGallery: 'calc(100vw - 3rem)',
       },
       fontFamily: {
-        sans: ['Helvetica Neue', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        serif: ['"IBMPlexSerif"', 'Palatino', 'ui-serif'],
+        sans: ['Space Grotesk', 'Arial', 'sans-serif'],
+        serif: ['Cormorant Garamond', 'Georgia', 'serif'],
       },
       fontSize: {
         display: ['var(--font-size-display)', '1.1'],
