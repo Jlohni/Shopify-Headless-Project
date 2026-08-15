@@ -117,13 +117,13 @@ export function HeroShowcase({ products = [] }) {
 
         </div>
 
-        {/* Bottom Selector Carousel Controls */}
-        <div className="pt-8 sm:pt-14 relative flex items-center">
+        {/* Bottom Selector Grid Controls (Balanced Full Width Layout) */}
+        <div className="pt-8 sm:pt-14 relative flex items-center gap-2 sm:gap-4">
           
           {/* Previous Arrow Button */}
           <button
             onClick={handlePrev}
-            className="p-3 text-[#D7192D] hover:text-[#900e1c] transition-all hover:scale-125 z-20 shrink-0"
+            className="p-2.5 text-[#D7192D] hover:text-[#900e1c] transition-all hover:scale-125 z-20 shrink-0"
             aria-label="Previous Product"
           >
             <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -131,12 +131,12 @@ export function HeroShowcase({ products = [] }) {
             </svg>
           </button>
 
-          {/* Carousel Track */}
+          {/* Product Track Grid (5 Equal Width Cards) */}
           <div
             ref={carouselRef}
-            className="flex items-center gap-4 sm:gap-6 overflow-x-auto scrollbar-none py-4 px-3 flex-1 scroll-smooth snap-x snap-mandatory"
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-5 flex-1 items-center"
           >
-            {products.map((item, idx) => {
+            {products.slice(0, 5).map((item, idx) => {
               const isSelected = idx === selectedIndex;
               const isHovered = idx === hoveredIndex;
               const thumbUrl = getTransparentProductImage(item);
@@ -148,7 +148,7 @@ export function HeroShowcase({ products = [] }) {
                   onClick={() => setSelectedIndex(idx)}
                   onMouseEnter={() => setHoveredIndex(idx)}
                   onMouseLeave={() => setHoveredIndex(null)}
-                  className={`snap-start flex flex-col items-center min-w-[140px] sm:min-w-[165px] p-3 rounded-2xl transition-all duration-300 text-left border ${
+                  className={`group flex flex-col items-center w-full p-3.5 rounded-2xl transition-all duration-300 text-left border ${
                     isSelected
                       ? 'bg-white border-[#D7192D] shadow-lg scale-105 -translate-y-1'
                       : isHovered
@@ -156,14 +156,14 @@ export function HeroShowcase({ products = [] }) {
                       : 'bg-white/40 border-transparent hover:bg-white/70 opacity-75 hover:opacity-100'
                   }`}
                 >
-                  <div className="w-24 h-16 sm:w-28 sm:h-20 flex items-center justify-center p-1 overflow-hidden">
+                  <div className="w-full h-16 sm:h-20 flex items-center justify-center p-1 overflow-hidden">
                     <img
                       src={thumbUrl}
                       alt={item.title}
-                      className="w-full h-full object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110"
+                      className="w-full h-full object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-1"
                     />
                   </div>
-                  <div className="mt-2.5 text-center w-full">
+                  <div className="mt-2 text-center w-full">
                     <div className={`text-xs font-bold truncate ${isSelected || isHovered ? 'text-[#D7192D]' : 'text-[#151515]'}`}>
                       {item.title}
                     </div>
@@ -179,7 +179,7 @@ export function HeroShowcase({ products = [] }) {
           {/* Next Arrow Button */}
           <button
             onClick={handleNext}
-            className="p-3 text-[#D7192D] hover:text-[#900e1c] transition-all hover:scale-125 z-20 shrink-0"
+            className="p-2.5 text-[#D7192D] hover:text-[#900e1c] transition-all hover:scale-125 z-20 shrink-0"
             aria-label="Next Product"
           >
             <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">

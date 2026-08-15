@@ -3,6 +3,7 @@
  * Falls back to Shopify product featuredImage URL when no supplied image is matched.
  */
 export const SUPPLIED_TRANSPARENT_IMAGES = {
+  'nike-air-max-270': '/assets/shoes/nike-air-max-270.png',
   'adidas-ultraboost-22': '/assets/shoes/adidas-ultraboost-22.png',
   'new-balance-574': '/assets/shoes/new-balance-574.png',
   'puma-rs-x-sneakers': '/assets/shoes/puma-rs-x-sneakers.png',
