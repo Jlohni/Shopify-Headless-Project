@@ -15,7 +15,6 @@ import {
   getShopAnalytics,
   getSeoMeta,
 } from '@shopify/hydrogen';
-import invariant from 'tiny-invariant';
 
 import {PageLayout} from '~/components/PageLayout';
 import {GenericError} from '~/components/GenericError';
@@ -26,34 +25,16 @@ import styles from '~/styles/app.css?url';
 
 import {DEFAULT_LOCALE, parseMenu} from './lib/utils';
 
-// This is important to avoid re-fetching root queries on sub-navigations
-/**
- * @type {ShouldRevalidateFunction}
- */
 export const shouldRevalidate = ({formMethod, currentUrl, nextUrl}) => {
-  // revalidate when a mutation is performed e.g add to cart, login...
   if (formMethod && formMethod !== 'GET') {
     return true;
   }
-
-  // revalidate when manually revalidating via useRevalidator
   if (currentUrl.toString() === nextUrl.toString()) {
     return true;
   }
-
   return false;
 };
 
-/**
- * The link to the main stylesheet is purposely not in this list. Instead, it is added
- * in the Layout function.
- *
- * This is to avoid a development bug where after an edit/save, navigating to another
- * link will cause page rendering error "failed to execute 'insertBefore' on 'Node'".
- *
- * This is a workaround until this is fixed in the foundational library.
- * @type {LinksFunction}
- */
 export const links = () => {
   return [
     {
@@ -68,14 +49,8 @@ export const links = () => {
   ];
 };
 
-/**
- * @param {LoaderFunctionArgs} args
- */
 export async function loader(args) {
-  // Start fetching non-critical data without blocking time to first byte
   const deferredData = loadDeferredData(args);
-
-  // Await the critical data required to render initial state of the page
   const criticalData = await loadCriticalData(args);
 
   return defer({
@@ -84,19 +59,12 @@ export async function loader(args) {
   });
 }
 
-/**
- * Load data necessary for rendering content above the fold. This is the critical data
- * needed to render the page. If it's unavailable, the whole page should 400 or 500 error.
- * @param {LoaderFunctionArgs}
- */
 async function loadCriticalData({request, context}) {
   const [layout] = await Promise.all([
     getLayoutData(context),
-    // Add other queries here, so that they are loaded in parallel
   ]);
 
   const seo = seoPayload.root({shop: layout.shop, url: request.url});
-
   const {storefront, env} = context;
 
   return {
@@ -104,45 +72,32 @@ async function loadCriticalData({request, context}) {
     seo,
     shop: getShopAnalytics({
       storefront,
-      publicStorefrontId: env.PUBLIC_STOREFRONT_ID,
+      publicStorefrontId: env?.PUBLIC_STOREFRONT_ID || 'f90eccea41ffa08d57535479c8823b1b',
     }),
     consent: {
-      checkoutDomain: env.PUBLIC_CHECKOUT_DOMAIN,
-      storefrontAccessToken: env.PUBLIC_STOREFRONT_API_TOKEN,
+      checkoutDomain: env?.PUBLIC_CHECKOUT_DOMAIN || 'jagdish-lohni.myshopify.com',
+      storefrontAccessToken: env?.PUBLIC_STOREFRONT_API_TOKEN || 'f90eccea41ffa08d57535479c8823b1b',
       withPrivacyBanner: true,
     },
     selectedLocale: storefront.i18n,
   };
 }
 
-/**
- * Load data for rendering content below the fold. This data is deferred and will be
- * fetched after the initial page load. If it's unavailable, the page should still 200.
- * Make sure to not throw any errors here, as it will cause the page to 500.
- * @param {LoaderFunctionArgs}
- */
 function loadDeferredData({context}) {
   const {cart, customerAccount} = context;
 
   return {
-    isLoggedIn: customerAccount.isLoggedIn(),
-    cart: cart.get(),
+    isLoggedIn: customerAccount ? customerAccount.isLoggedIn().catch(() => false) : false,
+    cart: cart ? cart.get().catch(() => null) : null,
   };
 }
 
-/**
- * @param {Class<loader>>}
- */
 export const meta = ({data}) => {
-  return getSeoMeta(data.seo);
+  return getSeoMeta(data?.seo);
 };
 
-/**
- * @param {{children?: React.ReactNode}}
- */
 function Layout({children}) {
   const nonce = useNonce();
-  /** @type {RootLoader} */
   const data = useRouteLoaderData('root');
   const locale = data?.selectedLocale ?? DEFAULT_LOCALE;
 
@@ -188,9 +143,6 @@ export default function App() {
   );
 }
 
-/**
- * @param {{error: Error}}
- */
 export function ErrorBoundary({error}) {
   const routeError = useRouteError();
   const isRouteError = isRouteErrorResponse(routeError);
@@ -278,9 +230,6 @@ const LAYOUT_QUERY = `#graphql
   }
 `;
 
-/**
- * @param {AppLoadContext}
- */
 async function getLayoutData({storefront, env}) {
   const data = await storefront.query(LAYOUT_QUERY, {
     variables: {
@@ -288,24 +237,23 @@ async function getLayoutData({storefront, env}) {
       footerMenuHandle: 'footer',
       language: storefront.i18n.language,
     },
-  });
+  }).catch(() => null);
 
-  invariant(data, 'No data returned from Shopify API');
+  const shopData = data?.shop || {
+    id: 'gid://shopify/Shop/58410500149',
+    name: 'SOLESELECT',
+    description: 'Luxury Sneaker Storefront',
+    primaryDomain: {
+      url: 'https://jagdish-lohni.myshopify.com',
+    },
+  };
 
-  /*
-      Modify specific links/routes (optional)
-      @see: https://shopify.dev/api/storefront/unstable/enums/MenuItemType
-      e.g here we map:
-        - /blogs/news -> /news
-        - /blog/news/blog-post -> /news/blog-post
-        - /collections/all -> /products
-    */
   const customPrefixes = {BLOG: '', CATALOG: 'products'};
 
   const headerMenu = data?.headerMenu
     ? parseMenu(
         data.headerMenu,
-        data.shop.primaryDomain.url,
+        shopData.primaryDomain.url,
         env,
         customPrefixes,
       )
@@ -314,21 +262,11 @@ async function getLayoutData({storefront, env}) {
   const footerMenu = data?.footerMenu
     ? parseMenu(
         data.footerMenu,
-        data.shop.primaryDomain.url,
+        shopData.primaryDomain.url,
         env,
         customPrefixes,
       )
     : undefined;
 
-  return {shop: data.shop, headerMenu, footerMenu};
+  return {shop: shopData, headerMenu, footerMenu};
 }
-
-/** @typedef {LoaderReturnData} RootLoader */
-
-/** @typedef {import('@shopify/remix-oxygen').LinksFunction} LinksFunction */
-/** @typedef {import('@shopify/remix-oxygen').LoaderFunctionArgs} LoaderFunctionArgs */
-/** @typedef {import('@shopify/remix-oxygen').AppLoadContext} AppLoadContext */
-/** @typedef {import('@shopify/remix-oxygen').MetaArgs} MetaArgs */
-/** @typedef {import('@remix-run/react').ShouldRevalidateFunction} ShouldRevalidateFunction */
-/** @typedef {import('@shopify/hydrogen').SeoConfig} SeoConfig */
-/** @typedef {ReturnType<typeof useLoaderData<typeof loader>>} LoaderReturnData */

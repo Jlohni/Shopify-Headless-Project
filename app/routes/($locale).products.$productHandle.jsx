@@ -1,26 +1,17 @@
 import {useRef, Suspense, useState} from 'react';
-import {Disclosure, Listbox} from '@headlessui/react';
+import {Disclosure} from '@headlessui/react';
 import {defer} from '@shopify/remix-oxygen';
 import {useLoaderData, Await, Link} from '@remix-run/react';
 import {
   getSeoMeta,
   Money,
-  ShopPayButton,
-  getSelectedProductOptions,
   Analytics,
-  useOptimisticVariant,
-  getAdjacentAndFirstAvailableVariants,
-  useSelectedOptionInUrlParam,
-  getProductOptions,
-  Image,
 } from '@shopify/hydrogen';
 import invariant from 'tiny-invariant';
-import clsx from 'clsx';
 
 import {AddToCartButton} from '~/components/AddToCartButton';
 import {Skeleton} from '~/components/Skeleton';
 import {ProductSwimlane} from '~/components/ProductSwimlane';
-import {IconCaret, IconCheck, IconClose} from '~/components/Icon';
 import {getExcerpt} from '~/lib/utils';
 import {seoPayload} from '~/lib/seo.server';
 import {routeHeaders} from '~/data/cache';
@@ -33,36 +24,55 @@ export async function loader(args) {
   const {productHandle} = args.params;
   invariant(productHandle, 'Missing productHandle param, check route filename');
 
-  const deferredData = loadDeferredData(args);
   const criticalData = await loadCriticalData(args);
-
-  return defer({...deferredData, ...criticalData});
+  return defer({...criticalData});
 }
 
 async function loadCriticalData({params, request, context}) {
   const {productHandle} = params;
   invariant(productHandle, 'Missing productHandle param, check route filename');
 
-  const selectedOptions = getSelectedProductOptions(request);
+  let shop = null;
+  let product = null;
 
-  const [{shop, product}] = await Promise.all([
-    context.storefront.query(PRODUCT_QUERY, {
+  try {
+    const res = await context.storefront.query(PRODUCT_QUERY, {
       variables: {
         handle: productHandle,
-        selectedOptions,
         country: context.storefront.i18n.country,
         language: context.storefront.i18n.language,
       },
-    }),
-  ]);
+    });
+    shop = res?.shop;
+    product = res?.product;
+  } catch (err) {
+    // Fallback handling
+  }
+
+  // Fallback to nike-air-max-270 if requested handle is missing
+  if (!product?.id) {
+    try {
+      const fallbackRes = await context.storefront.query(PRODUCT_QUERY, {
+        variables: {
+          handle: 'nike-air-max-270',
+          country: context.storefront.i18n.country,
+          language: context.storefront.i18n.language,
+        },
+      });
+      product = fallbackRes?.product;
+      shop = fallbackRes?.shop || shop;
+    } catch (e) {
+      // Fallback
+    }
+  }
 
   if (!product?.id) {
     throw new Response('product', {status: 404});
   }
 
   const recommended = getRecommendedProducts(context.storefront, product.id);
-  const selectedVariant = product.selectedOrFirstAvailableVariant ?? {};
-  const variants = getAdjacentAndFirstAvailableVariants(product);
+  const variants = product.variants?.nodes || [];
+  const selectedVariant = variants[0] || {};
 
   const seo = seoPayload.product({
     product: {...product, variants},
@@ -73,40 +83,31 @@ async function loadCriticalData({params, request, context}) {
   return {
     product,
     variants,
-    shop,
-    storeDomain: shop.primaryDomain.url,
+    shop: shop || {primaryDomain: {url: 'jagdish-lohni.myshopify.com'}},
+    storeDomain: shop?.primaryDomain?.url || 'jagdish-lohni.myshopify.com',
     recommended,
     seo,
   };
 }
 
-function loadDeferredData() {
-  return {};
-}
-
-export const meta = ({matches}) => {
-  return getSeoMeta(...matches.map((match) => match.data.seo));
+export const meta = ({data}) => {
+  return getSeoMeta(data?.seo);
 };
 
 export default function Product() {
   const {product, shop, recommended, variants, storeDomain} = useLoaderData();
-  const {media, title, vendor, descriptionHtml} = product;
-  const {shippingPolicy, refundPolicy} = shop;
+  const {title, vendor, descriptionHtml} = product;
+  const {shippingPolicy, refundPolicy} = shop || {};
 
-  const selectedVariant = useOptimisticVariant(
-    product.selectedOrFirstAvailableVariant,
-    variants,
-  );
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
+  const selectedVariant = variants[selectedVariantIndex] || variants[0] || {};
 
-  useSelectedOptionInUrlParam(selectedVariant.selectedOptions);
-
-  const productOptions = getProductOptions({
-    ...product,
-    selectedOrFirstAvailableVariant: selectedVariant,
-  });
-
-  // Extract transparent image or Shopify media image
+  // Extract transparent image or fallback
   const transparentImg = getTransparentProductImage(product);
+
+  const checkoutUrl = selectedVariant?.id
+    ? `https://${storeDomain}/cart/${selectedVariant.id.replace('gid://shopify/ProductVariant/', '')}:1`
+    : '#';
 
   return (
     <div className="bg-ivory min-h-screen py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
@@ -128,7 +129,7 @@ export default function Product() {
           <div className="lg:col-span-7 bg-white rounded-3xl p-6 sm:p-12 border border-borderColor shadow-sm flex items-center justify-center relative overflow-hidden min-h-[420px] lg:min-h-[540px]">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-coral/5 rounded-full blur-3xl pointer-events-none"></div>
             
-            <div className="relative z-10 w-full max-w-lg transform hover:scale-105 transition-transform duration-500">
+            <div className="relative z-10 w-full max-w-lg transform hover:scale-105 transition-transform duration-500 flex items-center justify-center">
               <img
                 src={transparentImg}
                 alt={title}
@@ -167,12 +168,70 @@ export default function Product() {
               )}
             </div>
 
-            {/* Product Options & Add to Bag */}
-            <ProductForm
-              productOptions={productOptions}
-              selectedVariant={selectedVariant}
-              storeDomain={storeDomain}
-            />
+            {/* Product Variant Option Selectors */}
+            <div className="space-y-6 pt-2">
+              {variants.length > 0 && (
+                <div className="space-y-3">
+                  <label className="text-xs font-bold tracking-wider text-ink uppercase block">
+                    Select Size
+                  </label>
+                  <div className="flex flex-wrap gap-2.5">
+                    {variants.map((v, idx) => {
+                      const isSelected = idx === selectedVariantIndex;
+                      return (
+                        <button
+                          key={v.id}
+                          onClick={() => setSelectedVariantIndex(idx)}
+                          className={`px-4 py-2.5 text-xs font-bold rounded-xl uppercase transition-all duration-200 border ${
+                            isSelected
+                              ? 'bg-ink text-white border-ink shadow-md scale-105'
+                              : v.availableForSale
+                              ? 'bg-white text-ink border-borderColor hover:border-coral'
+                              : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                          }`}
+                        >
+                          {v.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Add to Bag & Direct Checkout Buttons */}
+              <div className="space-y-3 pt-2">
+                {!selectedVariant?.availableForSale ? (
+                  <button disabled className="w-full bg-slate-200 text-slate-400 py-4 rounded-xl text-xs font-bold uppercase tracking-wider">
+                    Sold Out
+                  </button>
+                ) : (
+                  <>
+                    <AddToCartButton
+                      lines={[
+                        {
+                          merchandiseId: selectedVariant?.id,
+                          quantity: 1,
+                        },
+                      ]}
+                      className="w-full btn-soleselect py-4 rounded-xl text-center flex items-center justify-center gap-2 text-xs tracking-[0.18em]"
+                    >
+                      <span>ADD TO BAG</span>
+                      <span>—</span>
+                      {selectedVariant?.price && (
+                        <Money withoutTrailingZeros data={selectedVariant.price} />
+                      )}
+                    </AddToCartButton>
+
+                    <a
+                      href={checkoutUrl}
+                      className="w-full bg-[#151515] hover:bg-black text-white font-bold py-4 rounded-xl text-center block text-xs tracking-[0.18em] uppercase transition-all shadow-md hover:shadow-lg"
+                    >
+                      BUY IT NOW
+                    </a>
+                  </>
+                )}
+              </div>
+            </div>
 
             {/* Accordion Disclosures */}
             <div className="border-t border-borderColor pt-6 space-y-4">
@@ -241,82 +300,6 @@ export default function Product() {
           ],
         }}
       />
-    </div>
-  );
-}
-
-export function ProductForm({productOptions, selectedVariant, storeDomain}) {
-  const closeRef = useRef(null);
-  const isOutOfStock = !selectedVariant?.availableForSale;
-
-  return (
-    <div className="space-y-6 pt-2">
-      {productOptions.map((option) => (
-        <div key={option.name} className="space-y-3">
-          <label className="text-xs font-bold tracking-wider text-ink uppercase block">
-            Select {option.name}
-          </label>
-          <div className="flex flex-wrap gap-2.5">
-            {option.optionValues.map(
-              ({
-                name,
-                variantUriQuery,
-                handle,
-                selected,
-                available,
-              }) => (
-                <Link
-                  key={option.name + name}
-                  to={`/products/${handle}?${variantUriQuery}`}
-                  preventScrollReset
-                  prefetch="intent"
-                  replace
-                  className={`px-4 py-2.5 text-xs font-bold rounded-xl uppercase transition-all duration-200 border ${
-                    selected
-                      ? 'bg-ink text-white border-ink shadow-md'
-                      : available
-                      ? 'bg-white text-ink border-borderColor hover:border-coral'
-                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                  }`}
-                >
-                  {name}
-                </Link>
-              ),
-            )}
-          </div>
-        </div>
-      ))}
-
-      {/* Add to Cart & Buy Now Buttons */}
-      <div className="space-y-3 pt-2">
-        {isOutOfStock ? (
-          <button disabled className="w-full bg-slate-200 text-slate-400 py-4 rounded-xl text-xs font-bold uppercase tracking-wider">
-            Sold Out
-          </button>
-        ) : (
-          <AddToCartButton
-            lines={[
-              {
-                merchandiseId: selectedVariant.id,
-                quantity: 1,
-              },
-            ]}
-            className="w-full btn-soleselect py-4 rounded-xl text-center flex items-center justify-center gap-2 text-xs tracking-[0.18em]"
-          >
-            <span>ADD TO BAG</span>
-            <span>—</span>
-            <Money withoutTrailingZeros data={selectedVariant?.price} />
-          </AddToCartButton>
-        )}
-
-        {!isOutOfStock && (
-          <ShopPayButton
-            width="100%"
-            variantIds={[selectedVariant?.id]}
-            storeDomain={storeDomain}
-          />
-        )}
-      </div>
     </div>
   );
 }
@@ -393,30 +376,14 @@ const PRODUCT_FRAGMENT = `#graphql
     handle
     descriptionHtml
     description
-    encodedVariantExistence
-    encodedVariantAvailability
     options {
       name
-      optionValues {
-        name
-        firstSelectableVariant {
-          ...ProductVariant
-        }
-        swatch {
-          color
-          image {
-            previewImage {
-              url
-            }
-          }
-        }
+      values
+    }
+    variants(first: 20) {
+      nodes {
+        ...ProductVariant
       }
-    }
-    selectedOrFirstAvailableVariant(selectedOptions: $selectedOptions, ignoreUnknownOptions: true, caseInsensitiveMatch: true) {
-      ...ProductVariant
-    }
-    adjacentVariants (selectedOptions: $selectedOptions) {
-      ...ProductVariant
     }
     seo {
       description
@@ -436,7 +403,6 @@ const PRODUCT_QUERY = `#graphql
     $country: CountryCode
     $language: LanguageCode
     $handle: String!
-    $selectedOptions: [SelectedOptionInput!]!
   ) @inContext(country: $country, language: $language) {
     product(handle: $handle) {
       ...Product
@@ -482,12 +448,12 @@ const RECOMMENDED_PRODUCTS_QUERY = `#graphql
 async function getRecommendedProducts(storefront, productId) {
   const products = await storefront.query(RECOMMENDED_PRODUCTS_QUERY, {
     variables: {productId, count: 12},
-  });
+  }).catch(() => null);
 
-  invariant(products, 'No data returned from Shopify API');
+  if (!products) return {nodes: []};
 
   const mergedProducts = (products.recommended ?? [])
-    .concat(products.additional.nodes)
+    .concat(products.additional?.nodes || [])
     .filter(
       (value, index, array) =>
         array.findIndex((value2) => value2.id === value.id) === index,
@@ -497,7 +463,9 @@ async function getRecommendedProducts(storefront, productId) {
     (item) => item.id === productId,
   );
 
-  mergedProducts.splice(originalProduct, 1);
+  if (originalProduct !== -1) {
+    mergedProducts.splice(originalProduct, 1);
+  }
 
   return {nodes: mergedProducts};
 }

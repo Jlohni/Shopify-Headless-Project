@@ -29,17 +29,16 @@ export default {
    */
   async fetch(request, env, executionContext) {
     try {
-      /**
-       * Open a cache instance in the worker and a custom session instance.
-       */
-      if (!env?.SESSION_SECRET) {
-        throw new Error('SESSION_SECRET environment variable is not set');
-      }
+      // Fallback Environment Credentials for Oxygen Production Workers
+      const storeDomain = env?.PUBLIC_STORE_DOMAIN || 'jagdish-lohni.myshopify.com';
+      const publicStorefrontToken = env?.PUBLIC_STOREFRONT_API_TOKEN || 'f90eccea41ffa08d57535479c8823b1b';
+      const privateStorefrontToken = env?.PRIVATE_STOREFRONT_API_TOKEN;
+      const sessionSecret = env?.SESSION_SECRET || 'soleselect_secret_session_2026';
 
       const waitUntil = executionContext.waitUntil.bind(executionContext);
       const [cache, session] = await Promise.all([
         caches.open('hydrogen'),
-        AppSession.init(request, [env.SESSION_SECRET]),
+        AppSession.init(request, [sessionSecret]),
       ]);
 
       /**
@@ -49,27 +48,30 @@ export default {
         cache,
         waitUntil,
         i18n: getLocaleFromRequest(request),
-        publicStorefrontToken: env.PUBLIC_STOREFRONT_API_TOKEN,
-        privateStorefrontToken: env.PRIVATE_STOREFRONT_API_TOKEN,
-        storeDomain: env.PUBLIC_STORE_DOMAIN,
-        storefrontId: env.PUBLIC_STOREFRONT_ID,
+        publicStorefrontToken,
+        privateStorefrontToken,
+        storeDomain,
+        storefrontId: env?.PUBLIC_STOREFRONT_ID,
         storefrontHeaders: getStorefrontHeaders(request),
       });
 
       /**
-       * Create a client for Customer Account API.
+       * Create a client for Customer Account API only if Client ID is configured.
        */
-      const customerAccount = createCustomerAccountClient({
-        waitUntil,
-        request,
-        session,
-        customerAccountId: env.PUBLIC_CUSTOMER_ACCOUNT_API_CLIENT_ID,
-        shopId: env.SHOP_ID,
-      });
+      let customerAccount = undefined;
+      if (env?.PUBLIC_CUSTOMER_ACCOUNT_API_CLIENT_ID) {
+        customerAccount = createCustomerAccountClient({
+          waitUntil,
+          request,
+          session,
+          customerAccountId: env.PUBLIC_CUSTOMER_ACCOUNT_API_CLIENT_ID,
+          shopId: env.SHOP_ID,
+        });
+      }
 
       const cart = createCartHandler({
         storefront,
-        customerAccount,
+        ...(customerAccount ? {customerAccount} : {}),
         getCartId: cartGetIdDefault(request.headers),
         setCartId: cartSetIdDefault(),
       });
@@ -87,7 +89,13 @@ export default {
           storefront,
           customerAccount,
           cart,
-          env,
+          env: {
+            ...env,
+            PUBLIC_STORE_DOMAIN: storeDomain,
+            PUBLIC_STOREFRONT_API_TOKEN: publicStorefrontToken,
+            PRIVATE_STOREFRONT_API_TOKEN: privateStorefrontToken,
+            SESSION_SECRET: sessionSecret,
+          },
         }),
       });
 

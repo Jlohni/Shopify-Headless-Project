@@ -26,34 +26,44 @@ import {getFeaturedData} from './($locale).featured-products';
 
 export const headers = routeHeaders;
 
-/**
- * @param {LoaderFunctionArgs}
- */
 export async function loader({request, context, params}) {
-  const {data, errors} = await context.customerAccount.query(
-    CUSTOMER_DETAILS_QUERY,
-  );
+  let data = null;
+  let errors = null;
 
-  /**
-   * If the customer failed to load, we assume their access token is invalid.
-   */
-  if (errors?.length || !data?.customer) {
-    throw await doLogout(context);
+  try {
+    if (context.customerAccount) {
+      const res = await context.customerAccount.query(CUSTOMER_DETAILS_QUERY);
+      data = res?.data;
+      errors = res?.errors;
+    }
+  } catch (err) {
+    // Fallback if Customer Account API is unauthenticated or not configured
+    return defer({
+      customer: null,
+      heading: 'Account Details',
+      featuredDataPromise: getFeaturedData(context.storefront).catch(() => null),
+    });
   }
 
   const customer = data?.customer;
 
-  const heading = customer
-    ? customer.firstName
-      ? `Welcome, ${customer.firstName}.`
-      : `Welcome to your account.`
-    : 'Account Details';
+  if (!customer) {
+    return defer({
+      customer: null,
+      heading: 'Account Details',
+      featuredDataPromise: getFeaturedData(context.storefront).catch(() => null),
+    });
+  }
+
+  const heading = customer.firstName
+    ? `Welcome, ${customer.firstName}.`
+    : `Welcome to your account.`;
 
   return defer(
     {
       customer,
       heading,
-      featuredDataPromise: getFeaturedData(context.storefront),
+      featuredDataPromise: getFeaturedData(context.storefront).catch(() => null),
     },
     {
       headers: {
@@ -63,137 +73,55 @@ export async function loader({request, context, params}) {
   );
 }
 
-export default function Authenticated() {
-  /** @type {LoaderReturnData} */
-  const data = useLoaderData();
+export default function Account() {
+  const {customer, heading, featuredDataPromise} = useLoaderData();
   const outlet = useOutlet();
   const matches = useMatches();
 
-  // routes that export handle { renderInModal: true }
-  const renderOutletInModal = matches.some((match) => {
-    const handle = match?.handle;
-    return handle?.renderInModal;
-  });
+  const customPage = matches.some((match) => match.handle?.renderInOutlet);
 
-  if (outlet) {
-    if (renderOutletInModal) {
-      return (
-        <>
-          <Modal cancelLink="/account">
-            <Outlet context={{customer: data.customer}} />
-          </Modal>
-          <Account {...data} />
-        </>
-      );
-    } else {
-      return <Outlet context={{customer: data.customer}} />;
-    }
+  if (outlet && customPage) {
+    return outlet;
   }
 
-  return <Account {...data} />;
-}
-
-/**
- * @param {AccountType}
- */
-function Account({customer, heading, featuredDataPromise}) {
-  const orders = flattenConnection(customer.orders);
-  const addresses = flattenConnection(customer.addresses);
-
   return (
-    <>
-      <PageHeader heading={heading}>
-        <Form method="post" action={usePrefixPathWithLocale('/account/logout')}>
-          <button type="submit" className="text-primary/50">
-            Sign out
-          </button>
-        </Form>
-      </PageHeader>
-      {orders && <AccountOrderHistory orders={orders} />}
-      <AccountDetails customer={customer} />
-      <AccountAddressBook addresses={addresses} customer={customer} />
-      {!orders.length && (
-        <Suspense>
-          <Await
-            resolve={featuredDataPromise}
-            errorElement="There was a problem loading featured products."
-          >
-            {(data) => (
+    <div className="bg-ivory min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-10">
+        <PageHeader heading={heading}>
+          <Form method="post" action="/account/logout">
+            <button type="submit" className="text-xs font-bold text-coral uppercase hover:underline">
+              Sign out
+            </button>
+          </Form>
+        </PageHeader>
+
+        {customer ? (
+          <AccountDetails customer={customer} />
+        ) : (
+          <div className="bg-white p-8 rounded-3xl border border-borderColor text-center space-y-4 max-w-md mx-auto">
+            <h2 className="text-xl font-black text-ink uppercase">Customer Portal</h2>
+            <p className="text-xs text-mutedText">Sign in to view your orders, addresses, and saved wishlist.</p>
+            <a href="/account/login" className="inline-block btn-soleselect px-6 py-3 text-xs tracking-widest">
+              SIGN IN / REGISTER
+            </a>
+          </div>
+        )}
+
+        <Suspense fallback={null}>
+          <Await resolve={featuredDataPromise}>
+            {(featuredData) => (
               <>
-                <FeaturedCollections
-                  title="Popular Collections"
-                  collections={data.featuredCollections}
-                />
-                <ProductSwimlane products={data.featuredProducts} />
+                {featuredData?.featuredProducts && (
+                  <ProductSwimlane
+                    title="Featured Silhouettes"
+                    products={featuredData.featuredProducts}
+                  />
+                )}
               </>
             )}
           </Await>
         </Suspense>
-      )}
-    </>
-  );
-}
-
-/**
- * @param {OrderCardsProps}
- */
-function AccountOrderHistory({orders}) {
-  return (
-    <div className="mt-6">
-      <div className="grid w-full gap-4 p-4 py-6 md:gap-8 md:p-8 lg:p-12">
-        <h2 className="font-bold text-lead">Order History</h2>
-        {orders?.length ? <Orders orders={orders} /> : <EmptyOrders />}
       </div>
     </div>
   );
 }
-
-function EmptyOrders() {
-  return (
-    <div>
-      <Text className="mb-1" size="fine" width="narrow" as="p">
-        You haven&apos;t placed any orders yet.
-      </Text>
-      <div className="w-48">
-        <Button
-          className="w-full mt-2 text-sm"
-          variant="secondary"
-          to={usePrefixPathWithLocale('/')}
-        >
-          Start Shopping
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * @param {OrderCardsProps}
- */
-function Orders({orders}) {
-  return (
-    <ul className="grid grid-flow-row grid-cols-1 gap-2 gap-y-6 md:gap-4 lg:gap-6 false sm:grid-cols-3">
-      {orders.map((order) => (
-        <OrderCard order={order} key={order.id} />
-      ))}
-    </ul>
-  );
-}
-
-/**
- * @typedef {{
- *   orders: OrderCardFragment[];
- * }} OrderCardsProps
- */
-/**
- * @typedef {Object} AccountType
- * @property {CustomerDetailsFragment} customer
- * @property {Promise<FeaturedData>} featuredDataPromise
- * @property {string} heading
- */
-
-/** @typedef {import('@shopify/remix-oxygen').LoaderFunctionArgs} LoaderFunctionArgs */
-/** @typedef {import('customer-accountapi.generated').CustomerDetailsFragment} CustomerDetailsFragment */
-/** @typedef {import('customer-accountapi.generated').OrderCardFragment} OrderCardFragment */
-/** @typedef {import('./($locale).featured-products').FeaturedData} FeaturedData */
-/** @typedef {ReturnType<typeof useLoaderData<typeof loader>>} LoaderReturnData */
