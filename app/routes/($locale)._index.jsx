@@ -1,5 +1,5 @@
 import {defer} from '@shopify/remix-oxygen';
-import {Suspense} from 'react';
+import {Suspense, useState} from 'react';
 import {Await, useLoaderData} from '@remix-run/react';
 import {getSeoMeta} from '@shopify/hydrogen';
 
@@ -8,6 +8,7 @@ import {FeaturedCollection} from '~/components/FeaturedCollection';
 import {EditorialFeature} from '~/components/EditorialFeature';
 import {ServiceBenefits} from '~/components/ServiceBenefits';
 import {NewsletterSection} from '~/components/NewsletterSection';
+import {OpeningSoon} from '~/components/OpeningSoon';
 
 import {STOREFRONT_CONFIG, FALLBACK_PRODUCTS} from '~/lib/storefront.config';
 import {PRODUCT_CARD_FRAGMENT} from '~/data/fragments';
@@ -96,8 +97,15 @@ export const meta = ({matches}) => {
   return getSeoMeta(...matches.map((match) => match.data.seo));
 };
 
+const TARGET_LAUNCH_DATE = new Date('2026-10-02T00:00:00+05:30').getTime();
+
 export default function Homepage() {
+  const [isLive, setIsLive] = useState(() => Date.now() >= TARGET_LAUNCH_DATE);
   const {homepageCollection, fallbackProducts, homepageMetaobjects} = useLoaderData();
+
+  if (!isLive) {
+    return <OpeningSoon onLaunch={() => setIsLive(true)} />;
+  }
 
   // Determine products to display (Live Collection -> Live All Products -> Fallback Static Data)
   const displayProducts =
