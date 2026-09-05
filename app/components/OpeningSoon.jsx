@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const TARGET_LAUNCH_DATE = new Date('2026-10-02T00:00:00+05:30').getTime();
 
@@ -18,20 +18,24 @@ function calculateTimeLeft(target) {
 
 export function OpeningSoon({ onLaunch }) {
   const [timeLeft, setTimeLeft] = useState(() => calculateTimeLeft(TARGET_LAUNCH_DATE));
+  const onLaunchRef = useRef(onLaunch);
+  onLaunchRef.current = onLaunch;
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const update = () => {
       const remaining = calculateTimeLeft(TARGET_LAUNCH_DATE);
       setTimeLeft(remaining);
-      if (remaining.isComplete && onLaunch) {
-        onLaunch();
+      if (remaining.isComplete && onLaunchRef.current) {
+        onLaunchRef.current();
       }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [onLaunch]);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between relative overflow-hidden py-12 px-4 selection:bg-rose-500">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between relative overflow-hidden py-8 px-4 selection:bg-rose-500">
       <div className="max-w-4xl mx-auto w-full text-center my-auto space-y-8">
         <div className="inline-block px-4 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 font-extrabold text-xs uppercase tracking-widest animate-pulse">
           ✨ Official Store Launch Notice
@@ -60,7 +64,7 @@ export function OpeningSoon({ onLaunch }) {
             <div className="text-[10px] sm:text-xs font-bold text-amber-300 uppercase mt-1">Minutes</div>
           </div>
           <div className="bg-slate-900 border-2 border-rose-500/40 rounded-2xl p-4 sm:p-5 text-center">
-            <div className="text-3xl sm:text-5xl font-black text-rose-400 animate-pulse">{String(timeLeft.seconds).padStart(2, '0')}</div>
+            <div className="text-3xl sm:text-5xl font-black text-rose-400">{String(timeLeft.seconds).padStart(2, '0')}</div>
             <div className="text-[10px] sm:text-xs font-bold text-rose-300 uppercase mt-1">Seconds</div>
           </div>
         </div>
@@ -73,7 +77,35 @@ export function OpeningSoon({ onLaunch }) {
           </div>
           <div className="text-xs text-slate-400">Maldhan Chour, Ramnagar, Nainital - 244715</div>
         </div>
+
+        {/* Social Media Links & Follow Us */}
+        <div className="max-w-xl mx-auto space-y-3 pt-2">
+          <div className="inline-block px-3.5 py-1 rounded-full bg-pink-500/20 border border-pink-400/40 text-pink-300 font-extrabold text-xs uppercase tracking-wider animate-pulse">
+            ✨ Follow us for more updates!
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2.5 text-xs font-bold">
+            <a href="https://www.instagram.com/ninecart_official/" target="_blank" rel="noopener noreferrer" className="px-3.5 py-2 rounded-xl bg-pink-600/20 border border-pink-500 text-pink-300 hover:scale-105 transition-all">
+              Instagram @ninecart_official
+            </a>
+            <a href="https://www.facebook.com/ninecart" target="_blank" rel="noopener noreferrer" className="px-3.5 py-2 rounded-xl bg-blue-600/20 border border-blue-500 text-blue-300 hover:scale-105 transition-all">
+              Facebook /ninecart
+            </a>
+            <a href="https://www.youtube.com/@NineCart" target="_blank" rel="noopener noreferrer" className="px-3.5 py-2 rounded-xl bg-red-600/20 border border-red-500 text-red-300 hover:scale-105 transition-all">
+              YouTube @NineCart
+            </a>
+            <a href="https://wa.me/918273250959" target="_blank" rel="noopener noreferrer" className="px-3.5 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500 text-emerald-300 hover:scale-105 transition-all">
+              WhatsApp 8273250959
+            </a>
+            <a href="mailto:ninecartindia@gmail.com" className="px-3.5 py-2 rounded-xl bg-amber-600/20 border border-amber-500 text-amber-300 hover:scale-105 transition-all">
+              ninecartindia@gmail.com
+            </a>
+          </div>
+        </div>
       </div>
+
+      <footer className="mt-8 border-t border-slate-900 pt-4 text-center text-xs text-slate-500">
+        © 2026 NineCart Retail Store. Tel: 8273250959 · Email: ninecartindia@gmail.com
+      </footer>
     </div>
   );
 }
